@@ -1,0 +1,157 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+:root,
+[data-theme="dark"] {
+  --vari-primary: #6366F1;
+  --vari-secondary: #8B5CF6;
+  --vari-accent: #06B6D4;
+  --vari-dark: #0D0D14;
+  --vari-darker: #07070F;
+  --vari-surface: #12121C;
+  --vari-card: #16162A;
+  --vari-card2: #1C1C30;
+  --vari-light: #F1F1FF;
+  --vari-muted: #6B6B8A;
+  --vari-border: #1E1E35;
+  --vari-border-bright: #2E2E50;
+  --vari-success: #10B981;
+  --vari-warning: #F59E0B;
+  --vari-error: #EF4444;
+  --vari-msg-area: rgba(7,7,15,0.35);
+  --vari-input-bg: rgba(255,255,255,0.05);
+  --vari-hover: rgba(255,255,255,0.04);
+}
+
+[data-theme="light"] {
+  --vari-primary: #4F46E5;
+  --vari-secondary: #7C3AED;
+  --vari-accent: #0891B2;
+  --vari-dark: #F0F0F8;
+  --vari-darker: #F8F8FF;
+  --vari-surface: #EEEEF8;
+  --vari-card: #FFFFFF;
+  --vari-card2: #F5F5FF;
+  --vari-light: #1A1A2E;
+  --vari-muted: #7070A0;
+  --vari-border: #DDD8F0;
+  --vari-border-bright: #C8C4E8;
+  --vari-success: #059669;
+  --vari-warning: #D97706;
+  --vari-error: #DC2626;
+  --vari-msg-area: rgba(240,240,250,0.6);
+  --vari-input-bg: rgba(0,0,0,0.04);
+  --vari-hover: rgba(0,0,0,0.03);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  background: var(--vari-darker);
+  color: var(--vari-light);
+  font-family: 'Inter', system-ui, sans-serif;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--vari-border-bright); border-radius: 4px; transition: background 0.2s; }
+::-webkit-scrollbar-thumb:hover { background: var(--vari-muted); }
+
+/* smooth theme transitions */
+*, *::before, *::after {
+  transition-property: background-color, border-color, color, box-shadow;
+  transition-duration: 0.18s;
+  transition-timing-function: ease;
+}
+
+.card {
+  background: var(--vari-card);
+  border: 1px solid var(--vari-border);
+  border-radius: 10px;
+}
+
+.card-glass {
+  background: rgba(22, 22, 42, 0.8);
+  border: 1px solid var(--vari-border);
+  border-radius: 12px;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.card-glow {
+  background: var(--vari-card);
+  border: 1px solid rgba(99, 102, 241, 0.25);
+  border-radius: 12px;
+  box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.05), inset 0 1px 0 rgba(255,255,255,0.03);
+}
+
+.gradient-text {
+  background: linear-gradient(135deg, var(--vari-primary), var(--vari-accent));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.glow { box-shadow: 0 0 20px rgba(99, 102, 241, 0.25); }
+.glow-cyan { box-shadow: 0 0 20px rgba(6, 182, 212, 0.25); }
+
+.terminal-cursor {
+  display: inline-block;
+  width: 7px;
+  height: 14px;
+  background: var(--vari-accent);
+  animation: blink 1s infinite;
+  border-radius: 1px;
+}
+
+@keyframes blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+
+::selection { background: rgba(99, 102, 241, 0.4); color: #fff; }
+
+button, a, input, textarea { transition: all 0.15s ease; }
+button, a { cursor: pointer; }
+
+input:focus, textarea:focus {
+  outline: none;
+  border-color: var(--vari-primary);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.12);
+}
+
+.noise::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 999;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+  opacity: 0.4;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.fade-in { animation: fadeIn 0.2s ease-out; }
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.shimmer {
+  background: linear-gradient(90deg, transparent 0%, rgba(99,102,241,0.08) 50%, transparent 100%);
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite;
+}
+
+/* Arc/ring SVG trick */
+.metric-ring { transform-origin: center; transform: rotate(-90deg); }

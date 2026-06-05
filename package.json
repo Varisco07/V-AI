@@ -1,0 +1,47 @@
+{
+  "name": "v-ai",
+  "version": "1.0.0",
+  "description": "V-AI - Advanced AI Assistant Platform",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "setup-ai": "echo Apri SETUP_FREE.md per istruzioni gratuite! && start SETUP_FREE.md"
+  },
+  "dependencies": {
+    "@radix-ui/react-slot": "^1.0.2",
+    "@react-three/drei": "^9.95.0",
+    "@react-three/fiber": "^8.15.15",
+    "axios": "^1.6.5",
+    "class-variance-authority": "^0.7.0",
+    "clsx": "^2.1.0",
+    "framer-motion": "^11.0.3",
+    "gsap": "^3.12.5",
+    "jszip": "^3.10.1",
+    "lucide-react": "^0.314.0",
+    "next": "14.1.0",
+    "pdf-parse": "^1.1.1",
+    "pdfjs-dist": "^6.0.227",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "tailwind-merge": "^2.2.1",
+    "three": "^0.160.0",
+    "typescript": "^5.3.3",
+    "zustand": "^4.5.0"
+  },
+  "devDependencies": {
+    "@types/jszip": "^3.4.0",
+    "@types/node": "^20",
+    "@types/pdf-parse": "^1.1.5",
+    "@types/react": "^18",
+    "@types/react-dom": "^18",
+    "@types/three": "^0.160.0",
+    "autoprefixer": "^10.0.1",
+    "eslint": "^8",
+    "eslint-config-next": "14.1.0",
+    "postcss": "^8",
+    "tailwindcss": "^3.3.0"
+  }
+}

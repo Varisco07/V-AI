@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>V-AI Logo Test</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 40px;
+      background: #09090B;
+      display: flex;
+      gap: 40px;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      font-family: system-ui, -apple-system, sans-serif;
+    }
+    .logo-container {
+      text-align: center;
+    }
+    .logo-container h3 {
+      color: #FAFAFA;
+      margin-top: 20px;
+      font-size: 18px;
+    }
+    .logo-container p {
+      color: #71717A;
+      font-size: 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="logo-container">
+    <svg width="80" height="80" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="logoGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#6366F1" />
+          <stop offset="100%" stop-color="#06B6D4" />
+        </linearGradient>
+        <linearGradient id="innerGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#8B5CF6" />
+          <stop offset="100%" stop-color="#06B6D4" />
+        </linearGradient>
+      </defs>
+      
+      <circle cx="50" cy="50" r="48" fill="url(#logoGradient)" opacity="0.1" />
+      
+      <path 
+        d="M 25 25 L 50 70 L 75 25" 
+        stroke="url(#logoGradient)" 
+        stroke-width="8" 
+        stroke-linecap="round" 
+        stroke-linejoin="round"
+        fill="none"
+      />
+      
+      <circle cx="50" cy="50" r="6" fill="url(#innerGradient)" />
+      
+      <circle cx="30" cy="35" r="2.5" fill="#6366F1" opacity="0.6" />
+      <circle cx="70" cy="35" r="2.5" fill="#06B6D4" opacity="0.6" />
+      <circle cx="50" cy="80" r="2.5" fill="#8B5CF6" opacity="0.6" />
+      
+      <line x1="50" y1="56" x2="50" y2="77.5" stroke="#8B5CF6" stroke-width="2" opacity="0.4" />
+      <line x1="30" y1="35" x2="44" y2="47" stroke="#6366F1" stroke-width="2" opacity="0.4" />
+      <line x1="70" y1="35" x2="56" y2="47" stroke="#06B6D4" stroke-width="2" opacity="0.4" />
+    </svg>
+    <h3>V-AI Logo</h3>
+    <p>Main Brand Identity</p>
+  </div>
+
+  <div class="logo-container">
+    <svg width="80" height="80" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="userGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#6366F1" />
+          <stop offset="100%" stop-color="#8B5CF6" />
+        </linearGradient>
+      </defs>
+      
+      <circle cx="50" cy="50" r="48" fill="url(#userGradient)" opacity="0.15" />
+      <circle cx="50" cy="50" r="48" stroke="url(#userGradient)" stroke-width="2" opacity="0.3" />
+      
+      <circle cx="50" cy="38" r="14" fill="url(#userGradient)" />
+      <path 
+        d="M 25 75 Q 25 58, 50 58 Q 75 58, 75 75" 
+        fill="url(#userGradient)"
+      />
+    </svg>
+    <h3>User Avatar</h3>
+    <p>User Identity</p>
+  </div>
+</body>
+</html>
