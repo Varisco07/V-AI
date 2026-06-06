@@ -17,6 +17,7 @@ import {
   loadConversations, upsertConversation, createConversation,
   getActiveId, setActiveId, titleFromMessage, StoredMessage,
 } from '@/lib/conversations'
+import { getAIConfig, getAPIEndpoint, type AIProvider } from '@/lib/aiProvider'
 
 interface ZipFile { path: string; content: string; size: number; isBinary: boolean }
 
@@ -198,7 +199,13 @@ export default function AIChat() {
   const [isTyping, setIsTyping] = useState(false)
   const [isSearching, setIsSearching] = useState(false)
   const [language, setLanguage] = useState('en')
-  const [aiModel, setAiModel] = useState('llama3.2')
+  const [aiModel, setAiModel] = useState('llama3.1:8b')
+  const [aiProvider, setAiProvider] = useState<AIProvider>('ollama')
+
+  // Jarvis agent status
+  type AgentPhase = 'thinking'|'planning'|'searching'|'coding'|'reading'|'fixing'|'done'
+  type AgentStatus = { phase: AgentPhase; label: string; detail?: string }
+  const [agentStatus, setAgentStatus] = useState<AgentStatus|null>(null)
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
   const [zipContents, setZipContents] = useState<ZipFile[] | null>(null)
   const [zipName, setZipName] = useState<string | null>(null)
@@ -270,8 +277,11 @@ export default function AIChat() {
     setMounted(true)
     const saved = localStorage.getItem('vari-language')
     if (saved) setLanguage(saved)
-    const savedModel = localStorage.getItem('vari-model')
-    if (savedModel) setAiModel(savedModel)
+    
+    // Load AI provider config
+    const config = getAIConfig()
+    setAiProvider(config.provider)
+    setAiModel(config.model)
 
     const activeId = getActiveId()
     if (!activeId) {
@@ -287,7 +297,19 @@ export default function AIChat() {
       loadConv(id)
     }
     window.addEventListener('vari-conv-switch', onSwitch)
-    return () => window.removeEventListener('vari-conv-switch', onSwitch)
+    
+    // Listen for AI provider changes from AIProviderSelector
+    const onProviderChange = () => {
+      const newConfig = getAIConfig()
+      setAiProvider(newConfig.provider)
+      setAiModel(newConfig.model)
+    }
+    window.addEventListener('ai-provider-changed', onProviderChange)
+    
+    return () => {
+      window.removeEventListener('vari-conv-switch', onSwitch)
+      window.removeEventListener('ai-provider-changed', onProviderChange)
+    }
   }, [])
 
   useEffect(() => { if (mounted) localStorage.setItem('vari-model', aiModel) }, [aiModel, mounted])
@@ -465,14 +487,6 @@ export default function AIChat() {
 
     setMessages(prev => [...prev, userMsg])
     setInput('')
-    // Detect if a web search will likely fire
-    const searchTriggers = /\b(cerca|ricerca|dimmi|spiega|chi è|chi era|cos'è|cosa è|what is|who is|tell me about|search|find|storia|approfondisci|informazioni su|parlami di)\b/i
-    const isCodeReq = /\b(crea|create|scrivi|write|build|genera|code|script|programma|funzione|componente)\b/i
-    if (searchTriggers.test(trimmed) && !isCodeReq.test(trimmed)) {
-      setIsSearching(true)
-      pushActivity({ type: 'chat', label: 'Ricerca web in corso…', detail: trimmed.slice(0, 60) })
-    }
-
     setIsTyping(true)
     const requestStart = Date.now()
 
@@ -504,8 +518,117 @@ export default function AIChat() {
       if (active) agentContext = `Active agent: ${active.name} (${active.description})`
     } catch {}
 
+    // Set Jarvis status based on intent
+    const searchTriggers = /\b(cerca|ricerca|dimmi|spiega|chi è|chi era|what is|who is|tell me about|storia|approfondisci|informazioni su|parlami di)\b/i
+    const isCodeReq = /\b(crea|create|scrivi|write|build|genera|code|script|programma|funzione|componente)\b/i
+    if (zipContents) {
+      setAgentStatus({ phase: 'reading', label: 'Analisi file ZIP…', detail: `${zipContents.length} file` })
+    } else if (searchTriggers.test(trimmed) && !isCodeReq.test(trimmed)) {
+      setIsSearching(true)
+      setAgentStatus({ phase: 'searching', label: 'Ricerca web…', detail: trimmed.slice(0, 50) })
+    } else if (isCodeReq.test(trimmed)) {
+      setAgentStatus({ phase: 'coding', label: 'Generazione codice…' })
+    } else {
+      setAgentStatus({ phase: 'thinking', label: 'Elaborazione…' })
+    }
+
+    // Helper: handle [GENERATE_PROJECT:...] — multi-file project generator
+    const handleGenerateProject = async (projectRequest: string) => {
+      const pid = (Date.now() + 10).toString()
+      setMessages(prev => [...prev, {
+        id: pid, role: 'assistant',
+        content: `⚙️ **Generazione progetto in corso…**\n\nPianificazione architettura e scrittura file. Attendi 1-2 minuti.`,
+        timestamp: new Date(),
+      }])
+      setAgentStatus({ phase: 'coding', label: 'Generazione progetto…', detail: projectRequest.slice(0, 50) })
+      try {
+        const gr = await fetch('/api/generate-project', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ request: projectRequest, model: aiModel, language }),
+        })
+        if (!gr.ok) throw new Error('Generation failed')
+        const projectName = gr.headers.get('X-Project-Name') ?? 'project'
+        const fileCount = gr.headers.get('X-File-Count') ?? '?'
+        const filesJson = gr.headers.get('X-Files-Json')
+        const pFiles = filesJson ? JSON.parse(filesJson) : []
+        const blob = await gr.blob()
+        const url = URL.createObjectURL(blob)
+        const a = document.createElement('a'); a.href = url; a.download = `${projectName}.zip`; a.click()
+        URL.revokeObjectURL(url)
+        setMessages(prev => prev.map(m => m.id === pid ? {
+          ...m, content: `✅ **Progetto "${projectName}" generato!**\n\n${fileCount} file creati e scaricati automaticamente.`,
+          files: pFiles,
+        } : m))
+        pushActivity({ type: 'code', label: `Progetto generato`, detail: `${fileCount} file` })
+      } catch {
+        setMessages(prev => prev.map(m => m.id === pid ? {
+          ...m, content: '❌ Errore nella generazione. Riprova con un progetto più semplice.',
+        } : m))
+      }
+    }
+
+    // Helper: process a full response string
+    const processFullResponse = (fullText: string, repackFilesData?: any[]) => {
+      let cleanContent = fullText
+      let parsedFiles: Array<{ path: string; content: string }> | undefined
+      let gameKeyword: string | undefined
+
+      // [GENERATE_PROJECT:...] — handled async separately
+      const genMatch = fullText.match(/\[GENERATE_PROJECT:\s*([\s\S]+?)\]/i)
+      if (genMatch) {
+        setTimeout(() => handleGenerateProject(genMatch[1].trim()), 100)
+        return { cleanContent: '', parsedFiles: undefined, gameKeyword: undefined }
+      }
+
+      const gameMatch = fullText.match(/\[GAME:(\w+)\]/i)
+      if (gameMatch) {
+        gameKeyword = gameMatch[1].toLowerCase()
+        cleanContent = fullText.replace(/\[GAME:\w+\]/i, '').trim()
+        pushActivity({ type: 'code', label: `Gioco ${gameKeyword} pronto`, detail: 'Clicca Download ZIP' })
+      }
+
+      if (/\[ZIP_REPACK\]/i.test(fullText) && repackFilesData?.length) {
+        parsedFiles = repackFilesData
+        cleanContent = fullText.replace(/\[ZIP_REPACK\]/i, '').trim()
+        pushActivity({ type: 'zip', label: 'ZIP pronto per il download', detail: `${parsedFiles!.length} file` })
+      }
+
+      const filesMatch = fullText.match(/```files\n([\s\S]*?)```/)
+      if (filesMatch) {
+        try {
+          parsedFiles = JSON.parse(filesMatch[1])
+          cleanContent = fullText.replace(/```files\n[\s\S]*?```/, '').trim()
+          pushActivity({ type: 'code', label: `${parsedFiles!.length} file generati`, detail: parsedFiles!.map(f => f.path).slice(0, 3).join(', ') })
+        } catch { /* keep original */ }
+      }
+
+      return { cleanContent, parsedFiles, gameKeyword }
+    }
+
+    const finalizeMessage = (cleanContent: string, parsedFiles: any[] | undefined, gameKeyword: string | undefined, fullText: string) => {
+      recordPrompt(aiMessage.length, cleanContent.length, Date.now() - requestStart)
+
+      if (parsedFiles) {
+        parsedFiles.forEach(f => {
+          const ext = f.path.split('.').pop() || ''
+          addFile({ name: f.path.split('/').pop() || f.path, ext, type: 'generated', size: f.content.length, content: f.content })
+        })
+        const htmlFile = parsedFiles.find(f => /\.(html|htm)$/.test(f.path))
+        if (htmlFile) openPreview({ title: htmlFile.path, html: htmlFile.content })
+        else if (parsedFiles[0]) {
+          const ext = parsedFiles[0].path.split('.').pop() || 'code'
+          openPreview({ title: parsedFiles[0].path, code: parsedFiles[0].content, lang: ext })
+        }
+      }
+
+      setUploadedFiles([])
+      setZipContents(null)
+      setZipName(null)
+    }
+
     try {
-      const res = await fetch('/api/chat-local', {
+      const apiEndpoint = getAPIEndpoint(aiProvider)
+      const res = await fetch(apiEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -520,110 +643,115 @@ export default function AIChat() {
       })
 
       if (!res.ok) throw new Error('API error')
-      const data = await res.json()
 
-      let cleanContent: string = data.response
-      let parsedFiles: Array<{ path: string; content: string }> | undefined
-      let gameKeyword: string | undefined
+      const contentType = res.headers.get('content-type') || ''
 
-      // Detect [GAME:keyword] tag
-      const gameMatch = data.response.match(/\[GAME:(\w+)\]/i)
-      if (gameMatch) {
-        gameKeyword = gameMatch[1].toLowerCase()
-        cleanContent = data.response.replace(/\[GAME:\w+\]/i, '').trim()
-        pushActivity({ type: 'code', label: `Gioco ${gameKeyword} pronto`, detail: 'Clicca Download ZIP' })
-      }
+      // ── SSE Streaming ───────────────────────────────────────────────────────
+      if (contentType.includes('text/event-stream') && res.body) {
+        const streamingId = (Date.now() + 1).toString()
+        let fullText = ''
 
-      // Detect [ZIP_REPACK] tag — server sends back the uploaded files for re-download
-      const repackMatch = data.response.match(/\[ZIP_REPACK\]/i)
-      if (repackMatch && data.repackFiles?.length > 0) {
-        parsedFiles = data.repackFiles
-        cleanContent = data.response.replace(/\[ZIP_REPACK\]/i, '').trim()
-        pushActivity({ type: 'zip', label: 'ZIP pronto per il download', detail: `${parsedFiles!.length} file` })
-      }
+        setMessages(prev => [...prev, {
+          id: streamingId, role: 'assistant', content: '', timestamp: new Date(),
+        }])
 
-      // Parse files block
-      const filesMatch = data.response.match(/```files\n([\s\S]*?)```/)
-      if (filesMatch) {
-        try {
-          parsedFiles = JSON.parse(filesMatch[1])
-          cleanContent = data.response.replace(/```files\n[\s\S]*?```/, '').trim()
-          pushActivity({ type: 'code', label: `${parsedFiles!.length} file generati`, detail: parsedFiles!.map(f => f.path).slice(0, 3).join(', ') })
-        } catch { /* keep original */ }
-      }
+        const reader = res.body.getReader()
+        const decoder = new TextDecoder()
+        let buf = ''
 
-      const lowerContent = cleanContent.toLowerCase()
-      if (lowerContent.includes('bug') || lowerContent.includes('error') || lowerContent.includes('fix')) {
-        pushActivity({ type: 'bug', label: 'Bug analizzato', detail: trimmed.slice(0, 50) })
-      }
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          buf += decoder.decode(value, { stream: true })
+          const lines = buf.split('\n')
+          buf = lines.pop() ?? ''
 
-      const aiMsg: Message = {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        gameKeyword,
-        content: cleanContent,
-        files: parsedFiles,
-        timestamp: new Date(),
-      }
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue
+            const raw = line.slice(6)
+            try {
+              const json = JSON.parse(raw)
+              if (json.token) {
+                fullText += json.token
+                setMessages(prev => prev.map(m =>
+                  m.id === streamingId ? { ...m, content: fullText } : m
+                ))
+              }
+              if (json.reset) {
+                // Auto-reflection replaced the response
+                fullText = json.reset
+                setMessages(prev => prev.map(m =>
+                  m.id === streamingId ? { ...m, content: fullText } : m
+                ))
+              }
+              if (json.done) {
+                const { cleanContent, parsedFiles, gameKeyword } = processFullResponse(fullText)
+                setMessages(prev => prev.map(m => m.id === streamingId ? {
+                  ...m, content: cleanContent, files: parsedFiles, gameKeyword,
+                } : m))
 
-      setMessages(prev => {
-        const updated = [...prev, aiMsg]
-        // Persist to conversation store
-        if (convIdRef.current) {
-          const stored: StoredMessage[] = updated
-            .filter(m => m.id !== '1' || m.role !== 'assistant' || updated.length > 1)
-            .map(m => ({ ...m, timestamp: m.timestamp.getTime() }))
-          const title = titleFromMessage(updated.find(m => m.role === 'user')?.content || 'New chat')
-          upsertConversation({
-            id: convIdRef.current,
-            title,
-            messages: stored,
-            createdAt: Date.now(),
-            updatedAt: Date.now(),
-          })
-        }
-        return updated
-      })
-
-      // Record session stats
-      recordPrompt(aiMessage.length, cleanContent.length, Date.now() - requestStart)
-
-      // Track generated files
-      if (parsedFiles) {
-        parsedFiles.forEach(f => {
-          const ext = f.path.split('.').pop() || ''
-          addFile({ name: f.path.split('/').pop() || f.path, ext, type: 'generated', size: f.content.length, content: f.content })
-        })
-      }
-
-      // Auto-open Preview when HTML/game is generated
-      if (parsedFiles) {
-        const htmlFile = parsedFiles.find(f => f.path.endsWith('.html') || f.path.endsWith('.htm'))
-        if (htmlFile) {
-          openPreview({ title: htmlFile.path, html: htmlFile.content })
-        } else {
-          const firstCode = parsedFiles[0]
-          if (firstCode) {
-            const ext = firstCode.path.split('.').pop() || 'code'
-            openPreview({ title: firstCode.path, code: firstCode.content, lang: ext })
+                // Persist
+                setMessages(prev => {
+                  if (convIdRef.current) {
+                    const stored: StoredMessage[] = prev
+                      .filter(m => m.id !== '1' || m.role !== 'assistant' || prev.length > 1)
+                      .map(m => ({ ...m, timestamp: m.timestamp.getTime() }))
+                    upsertConversation({
+                      id: convIdRef.current!,
+                      title: titleFromMessage(prev.find(m => m.role === 'user')?.content || 'New chat'),
+                      messages: stored, createdAt: Date.now(), updatedAt: Date.now(),
+                    })
+                  }
+                  return prev
+                })
+                finalizeMessage(cleanContent, parsedFiles, gameKeyword, fullText)
+              }
+            } catch { /* skip malformed */ }
           }
         }
+
+      } else {
+        // ── Fallback: plain JSON (error responses) ──────────────────────────
+        const data = await res.json()
+        const { cleanContent, parsedFiles, gameKeyword } = processFullResponse(
+          data.response || '', data.repackFiles
+        )
+
+        const aiMsg: Message = {
+          id: (Date.now() + 1).toString(), role: 'assistant',
+          gameKeyword, content: cleanContent, files: parsedFiles, timestamp: new Date(),
+        }
+
+        setMessages(prev => {
+          const updated = [...prev, aiMsg]
+          if (convIdRef.current) {
+            const stored: StoredMessage[] = updated
+              .filter(m => m.id !== '1' || m.role !== 'assistant' || updated.length > 1)
+              .map(m => ({ ...m, timestamp: m.timestamp.getTime() }))
+            upsertConversation({
+              id: convIdRef.current, title: titleFromMessage(updated.find(m => m.role === 'user')?.content || 'New chat'),
+              messages: stored, createdAt: Date.now(), updatedAt: Date.now(),
+            })
+          }
+          return updated
+        })
+        finalizeMessage(cleanContent, parsedFiles, gameKeyword, data.response || '')
       }
 
-      setUploadedFiles([])
-      setZipContents(null)
-      setZipName(null)
-
     } catch {
+      const errorMsg = aiProvider === 'ollama' 
+        ? '**Connessione fallita.** Assicurati che Ollama sia in esecuzione (`ollama serve`).'
+        : '**Connessione fallita.** Verifica la configurazione di OpenRouter e la tua API key.'
+      
       setMessages(prev => [...prev, {
-        id: (Date.now() + 1).toString(),
-        role: 'assistant',
-        content: '**Connection error.** Make sure Ollama is running (`ollama serve`).',
+        id: (Date.now() + 1).toString(), role: 'assistant',
+        content: errorMsg,
         timestamp: new Date(),
       }])
     } finally {
       setIsTyping(false)
       setIsSearching(false)
+      setAgentStatus(null)
     }
   }
 
@@ -851,29 +979,77 @@ export default function AIChat() {
         )}
 
         {isTyping && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex gap-3">
+          <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }} transition={{ duration: 0.2 }} className="flex gap-3">
             <div className="shrink-0 mt-0.5"><Logo className="w-6 h-6" /></div>
-            <div className="flex items-center gap-2 px-3.5 py-3 rounded-xl"
-              style={{ background: 'rgba(255,255,255,0.04)', border: '1px solid var(--vari-border)' }}>
-              {isSearching ? (
-                <>
-                  <motion.div className="w-3.5 h-3.5" animate={{ rotate: 360 }}
-                    transition={{ duration: 1, repeat: Infinity, ease: 'linear' }}>
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-                      style={{ color: 'var(--vari-accent)' }}>
-                      <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
-                    </svg>
-                  </motion.div>
-                  <span className="text-xs" style={{ color: 'var(--vari-muted)' }}>Ricerca web…</span>
-                </>
-              ) : (
-                [0, 0.15, 0.3].map((delay, i) => (
-                  <motion.div key={i} className="w-1.5 h-1.5 rounded-full"
-                    style={{ background: 'var(--vari-primary)' }}
-                    animate={{ scale: [1, 1.5, 1], opacity: [0.4, 1, 0.4] }}
-                    transition={{ duration: 0.9, repeat: Infinity, delay }} />
-                ))
-              )}
+
+            <div className="flex-1 max-w-[88%] rounded-xl overflow-hidden"
+              style={{ border: '1px solid var(--vari-border)', background: 'rgba(255,255,255,0.03)' }}>
+
+              {/* Status row */}
+              <div className="flex items-center gap-2.5 px-3.5 py-2.5">
+                {/* Phase icon */}
+                {agentStatus?.phase === 'searching' || isSearching ? (
+                  <motion.svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24"
+                    fill="none" stroke="currentColor" strokeWidth="2" style={{ color: '#06b6d4' }}
+                    animate={{ rotate: 360 }} transition={{ duration: 1.2, repeat: Infinity, ease: 'linear' }}>
+                    <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+                  </motion.svg>
+                ) : agentStatus?.phase === 'coding' ? (
+                  <motion.svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24"
+                    fill="none" stroke="currentColor" strokeWidth="2" style={{ color: '#34d399' }}
+                    animate={{ opacity: [1, 0.4, 1] }} transition={{ duration: 0.8, repeat: Infinity }}>
+                    <polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>
+                  </motion.svg>
+                ) : agentStatus?.phase === 'reading' ? (
+                  <motion.svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24"
+                    fill="none" stroke="currentColor" strokeWidth="2" style={{ color: '#fbbf24' }}
+                    animate={{ y: [0, -2, 0] }} transition={{ duration: 1, repeat: Infinity }}>
+                    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/>
+                    <line x1="16" y1="17" x2="8" y2="17"/>
+                  </motion.svg>
+                ) : agentStatus?.phase === 'planning' ? (
+                  <motion.svg className="w-3.5 h-3.5 shrink-0" viewBox="0 0 24 24"
+                    fill="none" stroke="currentColor" strokeWidth="2" style={{ color: '#a78bfa' }}
+                    animate={{ scale: [1, 1.2, 1] }} transition={{ duration: 1, repeat: Infinity }}>
+                    <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
+                  </motion.svg>
+                ) : (
+                  <div className="flex items-center gap-1">
+                    {[0, 0.15, 0.3].map((delay, i) => (
+                      <motion.div key={i} className="w-1.5 h-1.5 rounded-full"
+                        style={{ background: 'var(--vari-primary)' }}
+                        animate={{ scale: [1, 1.5, 1], opacity: [0.4, 1, 0.4] }}
+                        transition={{ duration: 0.9, repeat: Infinity, delay }} />
+                    ))}
+                  </div>
+                )}
+
+                <div className="flex flex-col min-w-0">
+                  <span className="text-xs font-medium" style={{ color: 'var(--vari-light)' }}>
+                    {agentStatus?.label ?? 'V-AI sta elaborando…'}
+                  </span>
+                  {agentStatus?.detail && (
+                    <span className="text-[10px] truncate" style={{ color: 'var(--vari-muted)' }}>
+                      {agentStatus.detail}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Animated progress bar */}
+              <div className="h-0.5 w-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.05)' }}>
+                <motion.div className="h-full" style={{
+                  background: agentStatus?.phase === 'searching' ? 'linear-gradient(90deg,#06b6d4,#6366f1)'
+                    : agentStatus?.phase === 'coding' ? 'linear-gradient(90deg,#34d399,#06b6d4)'
+                    : agentStatus?.phase === 'reading' ? 'linear-gradient(90deg,#fbbf24,#f97316)'
+                    : agentStatus?.phase === 'planning' ? 'linear-gradient(90deg,#a78bfa,#ec4899)'
+                    : 'linear-gradient(90deg,#6366f1,#8b5cf6)',
+                }}
+                  animate={{ x: ['-100%', '100%'] }}
+                  transition={{ duration: 1.6, repeat: Infinity, ease: 'easeInOut' }} />
+              </div>
             </div>
           </motion.div>
         )}

@@ -5,6 +5,8 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { LayoutDashboard, Terminal as TerminalIcon, Sun, Moon } from 'lucide-react'
 import CommandCenter from '@/components/hud/CommandCenter'
 import SystemMetrics from '@/components/hud/SystemMetrics'
+import ProjectBrain from '@/components/hud/ProjectBrain'
+import AIProviderSelector from '@/components/hud/AIProviderSelector'
 import Terminal from '@/components/interface/Terminal'
 import AIChat from '@/components/interface/AIChat'
 import PreviewPanel from '@/components/interface/PreviewPanel'
@@ -48,6 +50,9 @@ export default function VariAI() {
 
   return (
     <main className="w-full h-screen overflow-hidden flex flex-col" style={{ background: 'var(--vari-darker)' }}>
+      {/* ProjectBrain floating button/panel */}
+      <ProjectBrain />
+      
       {theme === 'dark' && (
         <div className="fixed inset-0 pointer-events-none" style={{
           background: 'radial-gradient(ellipse 80% 40% at 50% -10%, rgba(99,102,241,0.1) 0%, transparent 60%)',
@@ -87,6 +92,7 @@ export default function VariAI() {
         </div>
 
         <div className="flex items-center gap-4">
+          <AIProviderSelector />
           <div className="flex items-center gap-1.5">
             <div className="w-1.5 h-1.5 rounded-full bg-emerald-400" style={{ boxShadow: '0 0 6px rgba(52,211,153,0.8)' }} />
             <span className="text-[11px]" style={{ color: 'var(--vari-muted)' }}>Online</span>
