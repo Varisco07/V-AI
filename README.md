@@ -251,6 +251,4 @@ Questo progetto è distribuito sotto licenza **MIT** — libero per uso personal
 
 Realizzato con ❤️ da [Varisco07](https://github.com/Varisco07)
 
-*"The future is already here — it's just not evenly distributed."*
-
 </div>
