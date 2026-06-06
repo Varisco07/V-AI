@@ -7,19 +7,22 @@ export const metadata: Metadata = {
   keywords: ['V-AI', 'AI Assistant', 'Artificial Intelligence', 'Platform', 'Ollama'],
 }
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
       <head>
         <link rel="icon" href="/favicon.ico" />
+        <link rel="manifest" href="/manifest.json" />
+        <meta name="theme-color" content="#6366f1" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+        <meta name="apple-mobile-web-app-title" content="V-AI" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <script dangerouslySetInnerHTML={{
+          __html: `if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js')`
+        }} />
       </head>
-      <body>
-        {children}
-      </body>
+      <body>{children}</body>
     </html>
   )
 }

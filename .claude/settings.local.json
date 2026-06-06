@@ -14,7 +14,9 @@
       "Bash(node -e *)",
       "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('version:', d['version']\\); print\\('main:', d.get\\('main','n/a'\\)\\)\")",
       "Bash(del \"C:\\\\Users\\\\varis\\\\OneDrive\\\\Desktop\\\\N-AI\\\\app\\\\api\\\\chat-claude\\\\route.ts\")",
-      "Bash(del \"C:\\\\Users\\\\varis\\\\OneDrive\\\\Desktop\\\\N-AI\\\\app\\\\api\\\\chat\\\\route.ts\")"
+      "Bash(del \"C:\\\\Users\\\\varis\\\\OneDrive\\\\Desktop\\\\N-AI\\\\app\\\\api\\\\chat\\\\route.ts\")",
+      "PowerShell(Invoke-RestMethod -Uri \"http://localhost:3000/api/chat-gemini\" -Method POST -ContentType \"application/json\" -Body '{\"message\":\"ciao\"}' 2>&1)",
+      "PowerShell($body = [System.Text.Encoding]::UTF8.GetBytes\\('{\"message\":\"test\"}'\\); $req = [System.Net.HttpWebRequest]::Create\\(\"http://localhost:3000/api/ai-gemini\"\\); $req.Method = \"POST\"; $req.ContentType = \"application/json\"; $req.ContentLength = $body.Length; $stream = $req.GetRequestStream\\(\\); $stream.Write\\($body, 0, $body.Length\\); $stream.Close\\(\\); try { $resp = $req.GetResponse\\(\\); $resp.StatusCode } catch { $_.Exception.Response.StatusCode })"
     ]
   }
 }

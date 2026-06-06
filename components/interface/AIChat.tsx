@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import {
   Send, Mic, MicOff, X, Paperclip, FileText, Image as ImageIcon,
   File, Settings, ChevronDown, Download, FolderArchive, Archive,
-  Copy, Check, ChevronRight, Globe, Cpu, Gamepad2,
+  Check, ChevronRight, Globe, Cpu, Gamepad2,
 } from 'lucide-react'
 import Logo from '@/components/core/Logo'
 import UserAvatar from '@/components/core/UserAvatar'
@@ -18,6 +18,7 @@ import {
   getActiveId, setActiveId, titleFromMessage, StoredMessage,
 } from '@/lib/conversations'
 import { getAIConfig, getAPIEndpoint, type AIProvider } from '@/lib/aiProvider'
+import { renderMarkdown } from '@/components/interface/Markdown'
 
 interface ZipFile { path: string; content: string; size: number; isBinary: boolean }
 
@@ -36,160 +37,6 @@ interface Message {
   zipInfo?: { name: string; fileCount: number }
   gameKeyword?: string
   attachments?: string[]  // display names
-}
-
-// ── Minimal markdown renderer ────────────────────────────────────────────────
-function renderMarkdown(text: string): React.ReactNode[] {
-  const nodes: React.ReactNode[] = []
-  const lines = text.split('\n')
-  let i = 0
-
-  while (i < lines.length) {
-    const line = lines[i]
-
-    // Fenced code block
-    if (line.startsWith('```')) {
-      const lang = line.slice(3).trim()
-      const codeLines: string[] = []
-      i++
-      while (i < lines.length && !lines[i].startsWith('```')) {
-        codeLines.push(lines[i])
-        i++
-      }
-      nodes.push(<CodeBlock key={i} code={codeLines.join('\n')} lang={lang} />)
-      i++
-      continue
-    }
-
-    // Headers
-    if (/^#{1,3}\s/.test(line)) {
-      const level = line.match(/^(#+)/)?.[1].length || 1
-      const content = line.replace(/^#+\s/, '')
-      const cls = level === 1
-        ? 'text-base font-bold mt-2 mb-1'
-        : level === 2
-          ? 'text-sm font-semibold mt-2 mb-1'
-          : 'text-xs font-semibold mt-1.5 mb-0.5'
-      nodes.push(<div key={i} className={cls} style={{ color: 'var(--vari-light)' }}>{inlineFormat(content)}</div>)
-      i++
-      continue
-    }
-
-    // Unordered list
-    if (/^[-*]\s/.test(line)) {
-      const items: string[] = []
-      while (i < lines.length && /^[-*]\s/.test(lines[i])) {
-        items.push(lines[i].replace(/^[-*]\s/, ''))
-        i++
-      }
-      nodes.push(
-        <ul key={i} className="space-y-0.5 my-1 pl-3">
-          {items.map((item, j) => (
-            <li key={j} className="text-sm flex gap-1.5" style={{ color: 'var(--vari-light)' }}>
-              <span style={{ color: 'var(--vari-primary)' }}>·</span>
-              <span>{inlineFormat(item)}</span>
-            </li>
-          ))}
-        </ul>
-      )
-      continue
-    }
-
-    // Ordered list
-    if (/^\d+\.\s/.test(line)) {
-      const items: string[] = []
-      let num = 1
-      while (i < lines.length && /^\d+\.\s/.test(lines[i])) {
-        items.push(lines[i].replace(/^\d+\.\s/, ''))
-        i++
-        num++
-      }
-      nodes.push(
-        <ol key={i} className="space-y-0.5 my-1 pl-3 list-none">
-          {items.map((item, j) => (
-            <li key={j} className="text-sm flex gap-1.5" style={{ color: 'var(--vari-light)' }}>
-              <span className="font-mono text-xs" style={{ color: 'var(--vari-primary)', minWidth: '14px' }}>{j + 1}.</span>
-              <span>{inlineFormat(item)}</span>
-            </li>
-          ))}
-        </ol>
-      )
-      continue
-    }
-
-    // Horizontal rule
-    if (/^---+$/.test(line.trim())) {
-      nodes.push(<hr key={i} className="my-2 border-t" style={{ borderColor: 'var(--vari-border)' }} />)
-      i++
-      continue
-    }
-
-    // Empty line
-    if (line.trim() === '') {
-      nodes.push(<div key={i} className="h-1.5" />)
-      i++
-      continue
-    }
-
-    // Paragraph
-    nodes.push(
-      <p key={i} className="text-sm leading-relaxed" style={{ color: 'var(--vari-light)' }}>
-        {inlineFormat(line)}
-      </p>
-    )
-    i++
-  }
-
-  return nodes
-}
-
-function inlineFormat(text: string): React.ReactNode {
-  const parts = text.split(/(`[^`]+`|\*\*[^*]+\*\*|\*[^*]+\*)/g)
-  return parts.map((part, i) => {
-    if (part.startsWith('`') && part.endsWith('`')) {
-      return (
-        <code key={i} className="px-1 py-0.5 rounded text-xs font-mono"
-          style={{ background: 'rgba(99,102,241,0.15)', color: '#a5b4fc' }}>
-          {part.slice(1, -1)}
-        </code>
-      )
-    }
-    if (part.startsWith('**') && part.endsWith('**')) {
-      return <strong key={i} style={{ color: 'var(--vari-light)', fontWeight: 600 }}>{part.slice(2, -2)}</strong>
-    }
-    if (part.startsWith('*') && part.endsWith('*')) {
-      return <em key={i}>{part.slice(1, -1)}</em>
-    }
-    return part
-  })
-}
-
-function CodeBlock({ code, lang }: { code: string; lang: string }) {
-  const [copied, setCopied] = useState(false)
-  const copy = () => {
-    navigator.clipboard.writeText(code)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 1500)
-  }
-  return (
-    <div className="my-2 rounded-lg overflow-hidden" style={{ border: '1px solid var(--vari-border)' }}>
-      <div className="flex items-center justify-between px-3 py-1.5"
-        style={{ background: 'rgba(255,255,255,0.04)', borderBottom: '1px solid var(--vari-border)' }}>
-        <span className="text-[10px] font-mono" style={{ color: 'var(--vari-muted)' }}>
-          {lang || 'code'}
-        </span>
-        <button onClick={copy} className="flex items-center gap-1 text-[10px] transition-colors"
-          style={{ color: copied ? 'var(--vari-success)' : 'var(--vari-muted)' }}>
-          {copied ? <Check className="w-3 h-3" /> : <Copy className="w-3 h-3" />}
-          {copied ? 'Copied' : 'Copy'}
-        </button>
-      </div>
-      <pre className="p-3 overflow-x-auto text-xs font-mono leading-relaxed"
-        style={{ background: 'rgba(7,7,15,0.6)', color: '#e2e8f0' }}>
-        {code}
-      </pre>
-    </div>
-  )
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -232,14 +79,25 @@ export default function AIChat() {
     { code: 'ja', name: '日本語', flag: '🇯🇵' },
   ]
 
-  const aiModels = [
-    { code: 'llama3.2',          name: 'Llama 3.2',          badge: '' },
-    { code: 'llama3.1:8b',       name: 'Llama 3.1 8B',       badge: '' },
-    { code: 'qwen2.5-coder:7b',  name: 'Qwen2.5 Coder',      badge: 'CODE' },
-    { code: 'deepseek-r1:7b',    name: 'DeepSeek R1',        badge: 'THINK' },
-    { code: 'mistral',           name: 'Mistral 7B',          badge: '' },
-    { code: 'codellama',         name: 'CodeLlama',           badge: 'CODE' },
-  ]
+  const aiModelsByProvider: Record<string, { code: string; name: string; badge: string }[]> = {
+    ollama: [
+      { code: 'llama3.2',          name: 'Llama 3.2',          badge: '' },
+      { code: 'llama3.1:8b',       name: 'Llama 3.1 8B',       badge: '' },
+      { code: 'qwen2.5-coder:7b',  name: 'Qwen2.5 Coder',      badge: 'CODE' },
+      { code: 'deepseek-r1:7b',    name: 'DeepSeek R1',        badge: 'THINK' },
+      { code: 'mistral',           name: 'Mistral 7B',          badge: '' },
+      { code: 'codellama',         name: 'CodeLlama',           badge: 'CODE' },
+    ],
+    groq: [
+      { code: 'llama-3.1-8b-instant',          name: 'Llama 3.1 8B Instant', badge: 'FAST' },
+      { code: 'llama-3.1-70b-versatile',        name: 'Llama 3.1 70B',        badge: '' },
+      { code: 'mixtral-8x7b-32768',             name: 'Mixtral 8x7B',         badge: '' },
+      { code: 'gemma2-9b-it',                   name: 'Gemma 2 9B',           badge: '' },
+      { code: 'llama-3.2-11b-vision-preview',   name: 'Llama 3.2 Vision 11B', badge: '👁️' },
+      { code: 'llama-3.2-90b-vision-preview',   name: 'Llama 3.2 Vision 90B', badge: '👁️' },
+    ],
+  }
+  const aiModels = aiModelsByProvider[aiProvider] ?? aiModelsByProvider.ollama
 
   const welcomeMsg: Record<string, string> = {
     en: "Hello! I'm V-AI. Ask me anything — code, analysis, writing, or upload a ZIP/PDF.",
@@ -298,11 +156,11 @@ export default function AIChat() {
     }
     window.addEventListener('vari-conv-switch', onSwitch)
     
-    // Listen for AI provider changes from AIProviderSelector
-    const onProviderChange = () => {
-      const newConfig = getAIConfig()
-      setAiProvider(newConfig.provider)
-      setAiModel(newConfig.model)
+    // Listen for AI provider changes — aggiorna solo provider/model, MAI i messaggi
+    const onProviderChange = (e: Event) => {
+      const detail = (e as CustomEvent).detail
+      if (detail?.provider) setAiProvider(detail.provider)
+      if (detail?.model) setAiModel(detail.model)
     }
     window.addEventListener('ai-provider-changed', onProviderChange)
     
@@ -490,24 +348,50 @@ export default function AIChat() {
     setIsTyping(true)
     const requestStart = Date.now()
 
+    // ── Image generation detection ───────────────────────────────────────────
+    const imageKeywords = /\b(genera|crea|disegna|draw|generate|create|make|paint|illustra|immagine|image|foto|picture|photo)\b/i
+    const isImageRequest = imageKeywords.test(trimmed) && trimmed.length > 5
+    if (isImageRequest && aiProvider === 'gemini') {
+      try {
+        const res = await fetch('/api/generate-image', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt: trimmed }),
+        })
+        const data = await res.json()
+        if (data.image) {
+          setMessages(prev => [...prev, {
+            id: (Date.now() + 1).toString(),
+            role: 'assistant',
+            content: `![generated](${data.image})`,
+            timestamp: new Date(),
+          }])
+          setIsTyping(false)
+          return
+        }
+      } catch { /* fallback to text */ }
+    }
+    // ────────────────────────────────────────────────────────────────────────
+
     // Load memory from localStorage for context injection
     let memoryContext = ''
     try {
       const mem = JSON.parse(localStorage.getItem('vari-ai-memory') || 'null')
+      const parts: string[] = []
       if (mem) {
-        const rules = mem.rules?.length ? mem.rules.join('; ') : ''
-        const stack = mem.frameworks?.length ? mem.frameworks.join(', ') : ''
-        const proj = mem.projectName || ''
-        const custom = mem.customInstructions || ''
-        if (rules || stack || proj || custom) {
-          memoryContext = [
-            proj && `Project: ${proj}`,
-            stack && `Tech stack: ${stack}`,
-            rules && `Rules: ${rules}`,
-            custom && `Instructions: ${custom}`,
-          ].filter(Boolean).join(' | ')
-        }
+        if (mem.projectName) parts.push(`Progetto: ${mem.projectName}`)
+        if (mem.frameworks?.length) parts.push(`Stack: ${mem.frameworks.join(', ')}`)
+        if (mem.rules?.length) parts.push(`Regole: ${mem.rules.join('; ')}`)
+        if (mem.customInstructions) parts.push(`Istruzioni: ${mem.customInstructions}`)
       }
+      // Aggiungi preferenze utente salvate
+      const userName = localStorage.getItem('vari-user-name')
+      if (userName) parts.push(`Utente: ${userName}`)
+      const userPrefs = localStorage.getItem('vari-user-prefs')
+      if (userPrefs) parts.push(`Preferenze: ${userPrefs}`)
+      // Lingua preferita
+      parts.push(`Rispondi sempre in ${language === 'it' ? 'italiano' : language === 'es' ? 'spagnolo' : language === 'fr' ? 'francese' : language === 'de' ? 'tedesco' : 'inglese'}.`)
+      memoryContext = parts.join(' | ')
     } catch {}
 
     // Load active agent
@@ -519,11 +403,12 @@ export default function AIChat() {
     } catch {}
 
     // Set Jarvis status based on intent
-    const searchTriggers = /\b(cerca|ricerca|dimmi|spiega|chi è|chi era|what is|who is|tell me about|storia|approfondisci|informazioni su|parlami di)\b/i
+    const searchTriggers = /\b(cerca|ricerca|dimmi|spiega|chi è|chi era|what is|who is|tell me about|storia|approfondisci|informazioni su|parlami di|notizie|news|oggi|quando|dove|perché|why|when|where|how)\b/i
     const isCodeReq = /\b(crea|create|scrivi|write|build|genera|code|script|programma|funzione|componente)\b/i
+    const shouldSearch = searchTriggers.test(trimmed) && !isCodeReq.test(trimmed) && trimmed.length > 8
     if (zipContents) {
       setAgentStatus({ phase: 'reading', label: 'Analisi file ZIP…', detail: `${zipContents.length} file` })
-    } else if (searchTriggers.test(trimmed) && !isCodeReq.test(trimmed)) {
+    } else if (shouldSearch) {
       setIsSearching(true)
       setAgentStatus({ phase: 'searching', label: 'Ricerca web…', detail: trimmed.slice(0, 50) })
     } else if (isCodeReq.test(trimmed)) {
@@ -531,6 +416,62 @@ export default function AIChat() {
     } else {
       setAgentStatus({ phase: 'thinking', label: 'Elaborazione…' })
     }
+
+    // ── Web search ────────────────────────────────────────────────────────────
+    let searchContext = ''
+    if (shouldSearch) {
+      try {
+        const sr = await fetch('/api/web-search', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query: trimmed, language }),
+        })
+        if (sr.ok) {
+          const { results } = await sr.json()
+          if (results?.length) {
+            searchContext = '\n\n[WEB SEARCH RESULTS]\n' +
+              results.map((r: any) => `• ${r.title}: ${r.snippet}`).join('\n') +
+              '\n[END SEARCH RESULTS]\nUsa queste informazioni per rispondere.'
+          }
+        }
+      } catch { /* ignora errori di ricerca */ }
+      setIsSearching(false)
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // ── Context compression (se la conversazione è lunga) ────────────────────
+    let historyToSend = messages.slice(-10).map(m => ({ role: m.role, content: m.content }))
+    if (messages.length > 20) {
+      const oldMessages = messages.slice(0, messages.length - 10)
+      const summary = oldMessages
+        .filter(m => m.role === 'assistant')
+        .map(m => m.content.slice(0, 100))
+        .join(' | ')
+      if (summary) {
+        historyToSend = [
+          { role: 'user', content: `[RIASSUNTO CONVERSAZIONE PRECEDENTE: ${summary.slice(0, 500)}]` },
+          { role: 'assistant', content: 'Capito, ho il contesto della conversazione precedente.' },
+          ...historyToSend,
+        ]
+      }
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
+    // ── Vision: immagine allegata con modello vision ──────────────────────────
+    const isVisionModel = aiModel.includes('vision')
+    const imageFile = uploadedFiles.find(u => u.file.type.startsWith('image/'))
+    let imageBase64: string | undefined
+    if (isVisionModel && imageFile) {
+      try {
+        imageBase64 = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader()
+          reader.onload = () => resolve(reader.result as string)
+          reader.onerror = reject
+          reader.readAsDataURL(imageFile.file)
+        })
+      } catch { /* ignora */ }
+    }
+    // ─────────────────────────────────────────────────────────────────────────
 
     // Helper: handle [GENERATE_PROJECT:...] — multi-file project generator
     const handleGenerateProject = async (projectRequest: string) => {
@@ -632,17 +573,21 @@ export default function AIChat() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          message: aiMessage,
-          history: messages.slice(-10).map(m => ({ role: m.role, content: m.content })),
+          message: aiMessage + searchContext,
+          history: historyToSend,
           language,
           model: aiModel,
           zipFiles: zipContents,
           memoryContext,
           agentContext,
+          imageBase64,
         }),
       })
 
-      if (!res.ok) throw new Error('API error')
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}))
+        throw new Error(errData.error || 'API error')
+      }
 
       const contentType = res.headers.get('content-type') || ''
 
@@ -738,10 +683,15 @@ export default function AIChat() {
         finalizeMessage(cleanContent, parsedFiles, gameKeyword, data.response || '')
       }
 
-    } catch {
-      const errorMsg = aiProvider === 'ollama' 
-        ? '**Connessione fallita.** Assicurati che Ollama sia in esecuzione (`ollama serve`).'
-        : '**Connessione fallita.** Verifica la configurazione di OpenRouter e la tua API key.'
+    } catch (err: any) {
+      const detail = err?.message && err.message !== 'API error' ? err.message : null
+      const errorMsg = detail
+        ? `**Errore.** ${detail}`
+        : aiProvider === 'ollama'
+          ? '**Connessione fallita.** Assicurati che Ollama sia in esecuzione (`ollama serve`).'
+          : aiProvider === 'groq'
+            ? '**Connessione fallita.** Verifica che GROQ_API_KEY sia configurata in .env.local.'
+            : '**Connessione fallita.** Verifica che GEMINI_API_KEY sia configurata in .env.local.'
       
       setMessages(prev => [...prev, {
         id: (Date.now() + 1).toString(), role: 'assistant',
@@ -825,33 +775,54 @@ export default function AIChat() {
         </button>
       </div>
 
+{/* Settings panel */}
       {/* Settings panel */}
       <AnimatePresence>
         {showSettings && (
           <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.18 }}
             className="overflow-hidden border-b shrink-0"
-            style={{ borderColor: 'var(--vari-border)', background: 'rgba(99,102,241,0.02)' }}>
-            <div className="p-4 space-y-4">
+            style={{ borderColor: 'var(--vari-border)', background: 'rgba(255,255,255,0.015)' }}>
+            <div className="px-4 py-3 space-y-3">
 
-              {/* Ollama models */}
+              {/* Provider AI */}
               <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--vari-muted)' }}>
-                  Modello Ollama
-                </p>
-                <div className="flex flex-wrap gap-1.5">
+                <p className="text-[10px] font-semibold uppercase tracking-wider mb-1.5"
+                  style={{ color: 'var(--vari-muted)' }}>Provider AI</p>
+                <div className="flex gap-1 mb-2 flex-wrap">
+                  {(['ollama', 'groq'] as const).map(p => (
+                    <button key={p}
+                      onClick={() => {
+                        const firstModel = aiModelsByProvider[p]?.[0]?.code ?? aiModel
+                        setAiProvider(p)
+                        setAiModel(firstModel)
+                        localStorage.setItem('ai-provider', p)
+                        localStorage.setItem('ai-model', firstModel)
+                        window.dispatchEvent(new CustomEvent('ai-provider-changed', { detail: { provider: p, model: firstModel } }))
+                      }}
+                      className="px-3 py-1 rounded-md text-[11px] font-medium"
+                      style={
+                        aiProvider === p
+                          ? { background: 'rgba(99,102,241,0.15)', color: 'var(--vari-primary)', border: '1px solid rgba(99,102,241,0.3)' }
+                          : { background: 'rgba(255,255,255,0.03)', color: 'var(--vari-muted)', border: '1px solid var(--vari-border)' }
+                      }>
+                      {{ ollama: '🏠 Locale', groq: '⚡ Groq' }[p]}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex flex-wrap gap-1">
                   {aiModels.map(m => (
                     <button key={m.code} onClick={() => setAiModel(m.code)}
-                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium transition-all"
+                      className="flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium"
                       style={{
-                        background: aiModel === m.code ? 'rgba(99,102,241,0.18)' : 'rgba(255,255,255,0.04)',
+                        background: aiModel === m.code ? 'rgba(99,102,241,0.15)' : 'rgba(255,255,255,0.03)',
                         color: aiModel === m.code ? 'var(--vari-primary)' : 'var(--vari-muted)',
-                        border: `1px solid ${aiModel === m.code ? 'rgba(99,102,241,0.35)' : 'var(--vari-border)'}`,
+                        border: `1px solid ${aiModel === m.code ? 'rgba(99,102,241,0.3)' : 'var(--vari-border)'}`,
                       }}>
                       {m.name}
                       {m.badge && (
                         <span className="text-[9px] px-1 rounded font-bold"
-                          style={{ background: 'rgba(6,182,212,0.15)', color: '#06b6d4' }}>
+                          style={{ background: 'rgba(6,182,212,0.12)', color: '#06b6d4' }}>
                           {m.badge}
                         </span>
                       )}
@@ -860,15 +831,16 @@ export default function AIChat() {
                 </div>
               </div>
 
-              {/* Language */}
+              {/* Lingua */}
               <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wider mb-2" style={{ color: 'var(--vari-muted)' }}>Lingua</p>
-                <div className="grid grid-cols-3 gap-1.5">
+                <p className="text-[10px] font-semibold uppercase tracking-wider mb-1.5"
+                  style={{ color: 'var(--vari-muted)' }}>Lingua risposta</p>
+                <div className="flex flex-wrap gap-1">
                   {languages.map(l => (
                     <button key={l.code} onClick={() => setLanguage(l.code)}
-                      className="py-1.5 rounded-md text-xs transition-all"
+                      className="px-2 py-1 rounded-md text-[11px] font-medium"
                       style={{
-                        background: language === l.code ? 'rgba(99,102,241,0.18)' : 'rgba(255,255,255,0.03)',
+                        background: language === l.code ? 'rgba(99,102,241,0.15)' : 'rgba(255,255,255,0.03)',
                         color: language === l.code ? 'var(--vari-primary)' : 'var(--vari-muted)',
                         border: `1px solid ${language === l.code ? 'rgba(99,102,241,0.3)' : 'var(--vari-border)'}`,
                       }}>

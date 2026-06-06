@@ -15,49 +15,39 @@ import {
 import { StoredFile, getFiles, removeFile, clearFiles, extIcon, timeAgo } from '@/lib/fileStore'
 import { openPreview } from '@/lib/previewStore'
 
-// ── Types ────────────────────────────────────────────────────────────────────
-
 interface Project {
   id: string; name: string; status: 'active' | 'idle' | 'completed'; progress: number; type: string
 }
 
-// Only persist id/active — icon must never go through JSON.stringify
 interface Agent {
   id: string; name: string; description: string; color: string; active: boolean
 }
 
-// Icons kept purely in memory, keyed by agent id
 const AGENT_ICONS: Record<string, typeof Code2> = {
-  dev: Code2,
-  research: Search,
-  writer: PenLine,
-  marketing: Megaphone,
+  dev: Code2, research: Search, writer: PenLine, marketing: Megaphone,
 }
 
 const DEFAULT_AGENTS: Agent[] = [
-  { id: 'dev', name: 'Developer', description: 'Code, debug, refactor', color: '#6366F1', active: false },
-  { id: 'research', name: 'Researcher', description: 'Analysis, summaries', color: '#06B6D4', active: false },
-  { id: 'writer', name: 'Writer', description: 'Writing, editing, docs', color: '#10B981', active: false },
-  { id: 'marketing', name: 'Marketing', description: 'Copy, strategy, SEO', color: '#F59E0B', active: false },
+  { id: 'dev',       name: 'Developer',  description: 'Code, debug, refactor',   color: '#6366F1', active: false },
+  { id: 'research',  name: 'Researcher', description: 'Analysis, summaries',      color: '#06B6D4', active: false },
+  { id: 'writer',    name: 'Writer',     description: 'Writing, editing, docs',   color: '#10B981', active: false },
+  { id: 'marketing', name: 'Marketing',  description: 'Copy, strategy, SEO',      color: '#F59E0B', active: false },
 ]
 
 const TABS = [
   { id: 'projects', label: 'Projects', icon: FolderOpen },
+  { id: 'chats',    label: 'Chats',    icon: MessageSquare },
   { id: 'agents',   label: 'Agents',   icon: Bot },
   { id: 'files',    label: 'Files',    icon: Files },
 ]
-
-// ── Helpers ──────────────────────────────────────────────────────────────────
 
 function save(key: string, data: any) { localStorage.setItem(key, JSON.stringify(data)) }
 function load<T>(key: string, fallback: T): T {
   try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : fallback } catch { return fallback }
 }
 
-// ── Main ─────────────────────────────────────────────────────────────────────
-
 export default function CommandCenter() {
-  const [tab, setTab] = useState<'projects' | 'agents' | 'files'>('projects')
+  const [tab, setTab] = useState<'projects' | 'chats' | 'agents' | 'files'>('projects')
   const [projects, setProjects] = useState<Project[]>([])
   const [agents, setAgents] = useState<Agent[]>(DEFAULT_AGENTS)
   const [conversations, setConversations] = useState<Conversation[]>([])
@@ -69,7 +59,6 @@ export default function CommandCenter() {
 
   useEffect(() => {
     setProjects(load('vari-ai-projects', [{ id: '1', name: 'V-AI Platform', status: 'active', progress: 90, type: 'Next.js' }]))
-    // Merge saved active-state with static defaults (never trust icon from storage)
     const savedAgents: Agent[] = load('vari-ai-agents', [])
     if (savedAgents.length > 0) {
       setAgents(DEFAULT_AGENTS.map(a => {
@@ -79,7 +68,6 @@ export default function CommandCenter() {
     }
     setConversations(loadConversations())
     setActiveConvId(getActiveId())
-
     setStoredFiles(getFiles())
 
     const onUpdate = () => setConversations(loadConversations())
@@ -106,7 +94,7 @@ export default function CommandCenter() {
 
   const handleNewChat = () => {
     createConversation()
-    setTab('projects') // switch to chat view
+    setTab('chats')
   }
 
   const handleSelectConv = (id: string) => {
@@ -146,9 +134,9 @@ export default function CommandCenter() {
       <div className="flex border-b shrink-0" style={{ borderColor: 'var(--vari-border)' }}>
         {TABS.map(({ id, label, icon: Icon }) => (
           <button key={id} onClick={() => setTab(id as any)}
-            className="flex-1 py-2.5 flex items-center justify-center gap-1 text-xs font-medium transition-all relative"
+            className="flex-1 py-2 flex items-center justify-center gap-1 text-[10px] font-medium transition-all relative"
             style={{ color: tab === id ? 'var(--vari-primary)' : 'var(--vari-muted)' }}>
-            <Icon className="w-3.5 h-3.5" />
+            <Icon className="w-3 h-3" />
             {label}
             {tab === id && (
               <motion.div layoutId="cc-tab" className="absolute bottom-0 left-0 right-0 h-0.5 rounded-t"
@@ -202,6 +190,58 @@ export default function CommandCenter() {
             </motion.div>
           )}
 
+          {/* ── CHATS ── */}
+          {tab === 'chats' && (
+            <motion.div key="chats" initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-1">
+              {conversations.length === 0 ? (
+                <div className="text-center py-10">
+                  <MessageSquare className="w-8 h-8 mx-auto mb-3 opacity-20" style={{ color: 'var(--vari-muted)' }} />
+                  <p className="text-xs" style={{ color: 'var(--vari-muted)' }}>Nessuna chat salvata.</p>
+                </div>
+              ) : conversations.map(conv => {
+                const isActive = conv.id === activeConvId
+                const lastMsg = conv.messages[conv.messages.length - 1]
+                const preview = lastMsg?.content?.slice(0, 60) || 'Nuova chat'
+                return (
+                  <motion.div key={conv.id} layout
+                    onClick={() => handleSelectConv(conv.id)}
+                    className="group px-3 py-2.5 rounded-lg cursor-pointer transition-all relative"
+                    style={{
+                      background: isActive ? 'rgba(99,102,241,0.12)' : 'var(--vari-hover)',
+                      border: `1px solid ${isActive ? 'rgba(99,102,241,0.35)' : 'var(--vari-border)'}`,
+                    }}
+                    onMouseEnter={e => { if (!isActive) (e.currentTarget as HTMLElement).style.borderColor = 'rgba(99,102,241,0.2)' }}
+                    onMouseLeave={e => { if (!isActive) (e.currentTarget as HTMLElement).style.borderColor = 'var(--vari-border)' }}>
+                    {isActive && (
+                      <div className="absolute left-0 top-2 bottom-2 w-0.5 rounded-r"
+                        style={{ background: 'var(--vari-primary)' }} />
+                    )}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium truncate"
+                          style={{ color: isActive ? 'var(--vari-primary)' : 'var(--vari-light)' }}>
+                          {conv.title}
+                        </p>
+                        <p className="text-[10px] truncate mt-0.5" style={{ color: 'var(--vari-muted)' }}>
+                          {preview}
+                        </p>
+                        <p className="text-[9px] mt-1" style={{ color: 'var(--vari-muted)', opacity: 0.6 }}>
+                          {timeLabel(conv.updatedAt)} · {conv.messages.length} msg
+                        </p>
+                      </div>
+                      <button
+                        onClick={e => handleDeleteConv(e, conv.id)}
+                        className="opacity-0 group-hover:opacity-100 transition-opacity shrink-0 mt-0.5"
+                        style={{ color: 'var(--vari-error)' }}>
+                        <Trash2 className="w-3 h-3" />
+                      </button>
+                    </div>
+                  </motion.div>
+                )
+              })}
+            </motion.div>
+          )}
+
           {/* ── AGENTS ── */}
           {tab === 'agents' && (
             <motion.div key="agents" initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} className="space-y-2">
@@ -224,8 +264,6 @@ export default function CommandCenter() {
           {/* ── FILES ── */}
           {tab === 'files' && (
             <motion.div key="files" initial={{ opacity: 0, y: 4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}>
-
-              {/* Filter buttons */}
               <div className="flex gap-1.5 mb-3">
                 {(['all','uploaded','generated'] as const).map(f => (
                   <FileFilterBtn key={f} label={f === 'all' ? 'Tutti' : f === 'uploaded' ? 'Caricati' : 'Generati'}
@@ -237,7 +275,6 @@ export default function CommandCenter() {
                     style={{ color: 'var(--vari-error)' }}>Svuota</button>
                 )}
               </div>
-
               {storedFiles.length === 0 ? (
                 <div className="text-center py-10">
                   <Files className="w-8 h-8 mx-auto mb-3 opacity-20" style={{ color: 'var(--vari-muted)' }} />
@@ -313,13 +350,7 @@ function ProjectCard({ project, onDelete, onProgress }: {
   )
 }
 
-// ── File Manager sub-components ──────────────────────────────────────────────
-
-function FileFilterBtn({ label, files, filter }: {
-  label: string
-  files: StoredFile[]
-  filter: 'all' | 'uploaded' | 'generated'
-}) {
+function FileFilterBtn({ label, files, filter }: { label: string; files: StoredFile[]; filter: 'all' | 'uploaded' | 'generated' }) {
   const count = filter === 'all' ? files.length : files.filter(f => f.type === filter).length
   return (
     <span className="px-2 py-1 rounded-md text-[10px] font-medium"
@@ -331,23 +362,16 @@ function FileFilterBtn({ label, files, filter }: {
 
 function FileRow({ file, onDelete }: { file: StoredFile; onDelete: () => void }) {
   const canPreview = ['html','htm','js','ts','py','css','json','md','txt'].includes(file.ext)
-  const isImage = ['png','jpg','jpeg','gif','webp','svg'].includes(file.ext)
-
   const handleClick = () => {
     if (!canPreview || !file.content) return
-    if (file.ext === 'html' || file.ext === 'htm') {
-      openPreview({ title: file.name, html: file.content })
-    } else {
-      openPreview({ title: file.name, code: file.content, lang: file.ext })
-    }
+    if (file.ext === 'html' || file.ext === 'htm') openPreview({ title: file.name, html: file.content })
+    else openPreview({ title: file.name, code: file.content, lang: file.ext })
   }
-
   const typeBadge = file.type === 'uploaded'
     ? { label: 'up', color: '#06b6d4' }
     : file.type === 'generated'
       ? { label: 'gen', color: '#6366f1' }
       : { label: 'game', color: '#f59e0b' }
-
   return (
     <div className="group flex items-center gap-2 px-2.5 py-2 rounded-lg transition-all cursor-pointer"
       style={{ border: '1px solid transparent' }}
@@ -384,8 +408,6 @@ const AGENT_PERSONALITIES: Record<string, string> = {
 function AgentCard({ agent, onToggle }: { agent: Agent; onToggle: () => void }) {
   const Icon = AGENT_ICONS[agent.id] ?? Code2
   const personality = AGENT_PERSONALITIES[agent.id] || ''
-  const status = agent.active ? 'Attivo' : 'Standby'
-
   return (
     <motion.div onClick={onToggle} whileTap={{ scale: 0.99 }}
       className="p-3 rounded-xl cursor-pointer transition-all"
@@ -395,7 +417,6 @@ function AgentCard({ agent, onToggle }: { agent: Agent; onToggle: () => void }) 
         boxShadow: agent.active ? `0 0 12px ${agent.color}18` : 'none',
       }}>
       <div className="flex items-start gap-3">
-        {/* Avatar */}
         <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
           style={{
             background: agent.active ? `${agent.color}25` : 'rgba(255,255,255,0.06)',
@@ -403,10 +424,8 @@ function AgentCard({ agent, onToggle }: { agent: Agent; onToggle: () => void }) 
           }}>
           <Icon className="w-4 h-4" style={{ color: agent.active ? agent.color : 'var(--vari-muted)' }} />
         </div>
-
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-0.5">
-            {/* Status dot */}
             <div className="w-1.5 h-1.5 rounded-full shrink-0" style={{
               background: agent.active ? agent.color : 'var(--vari-muted)',
               boxShadow: agent.active ? `0 0 6px ${agent.color}` : 'none',
@@ -415,7 +434,7 @@ function AgentCard({ agent, onToggle }: { agent: Agent; onToggle: () => void }) 
               {agent.name} Agent
             </span>
             <span className="text-[9px] ml-auto" style={{ color: agent.active ? agent.color : 'var(--vari-muted)' }}>
-              {status}
+              {agent.active ? 'Attivo' : 'Standby'}
             </span>
           </div>
           <p className="text-[10px] leading-relaxed" style={{ color: 'var(--vari-muted)' }}>{personality}</p>

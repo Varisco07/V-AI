@@ -1,4 +1,4 @@
-export type AIProvider = 'ollama' | 'openrouter'
+export type AIProvider = 'ollama' | 'groq'
 
 export interface AIConfig {
   provider: AIProvider
@@ -17,7 +17,8 @@ export function getAIConfig(): AIConfig {
 }
 
 export function getAPIEndpoint(provider: AIProvider): string {
-  return provider === 'openrouter' 
-    ? '/api/chat-openrouter'
-    : '/api/chat-local'
+  switch (provider) {
+    case 'groq': return '/api/chat-groq'
+    default:       return '/api/chat-local'
+  }
 }
